@@ -92,7 +92,9 @@ object CoreUpdater {
 
     /** Report newer compatible cores and newer cores blocked by the app version independently. */
     fun check(context: Context, channelUrl: String = BuildConfig.CORE_CHANNEL_URL): CheckResult {
-        val body = fetch(context, channelUrl); val signature = fetch(context, "$channelUrl.sig")
+        // 自建通道没有 .sig 文件，跳过下载，避免 404 让整个检查失败。
+        val body = fetch(context, channelUrl)
+        val signature = if (BuildConfig.SKIP_CORE_SIGNATURE) ByteArray(0) else fetch(context, "$channelUrl.sig")
         val updates = CoreBundle.updates(body, signature, keys(context), BuildConfig.CORE_API, versionCode(context))
         val current = status(context); val bundled = bundled(context)
         fun newer(it: CoreBundle.Offer) =

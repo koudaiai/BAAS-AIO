@@ -27,6 +27,10 @@ android {
         val coreChannelUrl = providers.gradleProperty("coreChannelUrl")
             .getOrElse("https://github.com/sk1lyn3/BAAS-AIO/releases/download/core-channel/stable.json")
         buildConfigField("String", "CORE_CHANNEL_URL", "\"$coreChannelUrl\"")
+        // 自建通道没有官方私钥：置 true 后跳过 core 包与索引的签名校验，
+        // 其余结构校验（coreApi/versionCode/逐文件 sha256/大小上限）保持不变。
+        buildConfigField("boolean", "SKIP_CORE_SIGNATURE",
+            providers.gradleProperty("skipCoreSignature").getOrElse("false"))
     }
 
     compileOptions {

@@ -41,7 +41,8 @@ object CoreBundle {
 
     /** Keep compatible updates separate from packages which require a newer app. Older APIs do not. */
     fun updates(body: ByteArray, signature: ByteArray, keys: List<PublicKey>, coreApi: Int, versionCode: Long): Updates {
-        if (!verified(keys, body, signature)) throw Rejected("更新信息签名无效")
+        // 自建通道：skipCoreSignature=true 时跳过索引验签（发布方没有官方私钥）。
+        if (!BuildConfig.SKIP_CORE_SIGNATURE && !verified(keys, body, signature)) throw Rejected("更新信息签名无效")
         val packages = JSONObject(String(body, Charsets.UTF_8)).getJSONArray("packages")
         val entries = (0 until packages.length()).map { packages.getJSONObject(it) }
         fun latest(items: List<JSONObject>) = items.maxByOrNull { instant(it.getString("commitTime")) }?.let {
@@ -90,8 +91,13 @@ object CoreBundle {
                 val manifestBytes = archive.getEntry("bundle-manifest.json")?.let { e -> archive.getInputStream(e).use { it.readBytes() } }
                     ?: throw Rejected("更新包缺少清单")
                 val signature = archive.getEntry("bundle-manifest.json.sig")?.let { e -> archive.getInputStream(e).use { it.readBytes() } }
-                    ?: throw Rejected("更新包缺少签名")
-                if (!verified(keys, manifestBytes, signature)) throw Rejected("更新包签名无效")
+                if (BuildConfig.SKIP_CORE_SIGNATURE) {
+                    // 自建通道不签名：允许缺少 .sig，其余结构校验（format/coreApi/versionCode/
+                    // 逐文件 sha256/大小上限）照旧保留，这些是正确性检查，不能省。
+                } else {
+                    if (signature == null) throw Rejected("更新包缺少签名")
+                    if (!verified(keys, manifestBytes, signature)) throw Rejected("更新包签名无效")
+                }
                 val manifest = JSONObject(String(manifestBytes, Charsets.UTF_8))
                 if (manifest.getInt("format") != 1) throw Rejected("更新包格式不受支持")
                 if (manifest.getInt("coreApi") != coreApi) throw Rejected("这个版本需要先更新应用")
@@ -129,7 +135,7 @@ object CoreBundle {
                 }
                 if (seen.size != files.length()) throw Rejected("更新包缺少文件")
                 File(staging, "bundle-manifest.json").writeBytes(manifestBytes)
-                File(staging, "bundle-manifest.json.sig").writeBytes(signature)
+                signature?.let { File(staging, "bundle-manifest.json.sig").writeBytes(it) }
             }
             checkData(File(staging, "data"))
             val id = offer.commit.take(12)
