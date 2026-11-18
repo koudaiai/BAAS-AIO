@@ -43,6 +43,36 @@ class SocketBroker : ISocketBroker.Stub() {
     private var clientOwner: android.os.IBinder? = null
     private var clientDeath: android.os.IBinder.DeathRecipient? = null
 
+    init {
+        alignMlsLevelWithApp()
+    }
+
+    /**
+     * SELinux 的 mlsconstrain 要求 unix socket 双方 MLS level 相等。
+     *
+     * app 进程是 u:r:untrusted_app:s0:cXXX,...（带 category），而 broker 由 Shizuku
+     * 以 root 拉起，context 是 u:r:su:s0（无 category），所以 openCompanionSocket
+     * 返回 ParcelFileDescriptor 时 fd 传递被 restrict（表现为 DeadObjectException）。
+     *
+     * 这里把本进程的 MLS level 对齐到 app 的 category，domain 仍是 su ——
+     * root 能力（建虚拟屏、跨屏启动、注入）全部保留，只是 level 与 app 一致。
+     */
+    private fun alignMlsLevelWithApp() {
+        runCatching {
+            val appPid = ProcessBuilder("pidof", "moe.baas.aio")
+                .redirectErrorStream(true).start()
+                .inputStream.bufferedReader().use { it.readText() }
+                .trim().split(" ").firstOrNull() ?: return
+            val appContext = File("/proc/$appPid/attr/current").readText().trim()
+            val categories = appContext.substringAfter("s0:", "")
+            if (categories.isBlank()) return
+            File("/proc/self/attr/current").writeText("u:r:su:s0:" + categories)
+            android.util.Log.i("BaasRuntime", "Aligned MLS level to app: u:r:su:s0:" + categories)
+        }.onFailure {
+            android.util.Log.e("BaasRuntime", "Align MLS level to app failed", it)
+        }
+    }
+
     @Synchronized override fun attachClient(owner: android.os.IBinder) {
         if (clientOwner == owner) return
         val death = android.os.IBinder.DeathRecipient {
