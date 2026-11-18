@@ -50,7 +50,12 @@ class CompanionBridge(private val broker: ISocketBroker) : AutoCloseable {
         // 其 am start --display 会因 uid 2000 无跨屏启动权限被 SecurityException 拒绝，
         // 表现为游戏根本没起来、awaitGameInput 等到超时。
         if (cmd == "launch" && packageName in gamePackages) {
-            val launchState = broker.launchPreviewGame(packageName)
+            // root 侧启动：input.request 的 shell 通道做 am start --display 会被
+            // SecurityException 拒（uid 2000 无跨屏启动权限），游戏根本起不来。
+            runCatching { broker.launchPreviewGame(packageName) }
+            // 仍走 input.request 拿标准 metadata —— Python 侧 _input 要读 completedNs，
+            // 直接返回 launchState 会触发 KeyError。此处它的 shell 启动失败无妨。
+            val reply = input.request(request).metadata
             val started = android.os.SystemClock.elapsedRealtime()
             DebugTrace.log("Waiting for game input window: $packageName; " + debugState())
             try { broker.awaitGameInput(packageName) }
@@ -58,7 +63,7 @@ class CompanionBridge(private val broker: ISocketBroker) : AutoCloseable {
                 DebugTrace.log("Game window wait failed: $error; " + debugState(true), 3); throw error
             }
             DebugTrace.log("Game input ready after ${android.os.SystemClock.elapsedRealtime() - started}ms: $packageName")
-            return launchState
+            return reply
         }
         return input.request(request).metadata
     }
