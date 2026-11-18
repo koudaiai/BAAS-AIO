@@ -150,7 +150,9 @@ class SocketBroker : ISocketBroker.Stub() {
         require(packageName in listOf("com.YostarJP.BlueArchive", "com.nexon.bluearchive", "com.RoamingStar.BlueArchive", "com.RoamingStar.BlueArchive.bilibili"))
         val displayId = companion().displayId
         check(displayId >= 0) { "No virtual display for game input" }
-        val deadline = android.os.SystemClock.elapsedRealtime() + 10_000
+        // 蓝档案冷启动实测 15~25 秒才出焦点窗口；原来 10 秒会在托管/自动启动时
+        // 必然超时（手动 launchPreviewGame 不等待，所以不受影响）。
+        val deadline = android.os.SystemClock.elapsedRealtime() + 45_000
         while (android.os.SystemClock.elapsedRealtime() < deadline) {
             check(companion().displayId == displayId) { "Display changed while waiting for game input" }
             val process = ProcessBuilder("dumpsys", "-t", "1", "input").redirectErrorStream(true).start()
