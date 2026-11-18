@@ -60,7 +60,7 @@ class SocketBroker : ISocketBroker.Stub() {
         service ?: CompanionUserService().also { service = it }
 
     @Synchronized private fun shutdown(): Nothing {
-        if (BuildConfig.DEBUG) android.util.Log.d("BaasRuntime", "Runtime shutdown: client owner died or destroy requested; display=${service?.displayId}")
+        android.util.Log.e("BaasRuntime", "Runtime shutdown: client owner died or destroy requested; display=${service?.displayId}")
         val runtime = service
         try {
             runtime?.launchedGamePackages()?.forEach { name ->
@@ -301,6 +301,10 @@ class SocketBroker : ISocketBroker.Stub() {
         connectSocket()
     } catch (error: Exception) {
         val cause = (error as? java.lang.reflect.InvocationTargetException)?.targetException ?: error
+        // binder 会杀掉抛出 RuntimeException 的服务端，客户端只看到 DeadObjectException。
+        // 这里必须先把真实原因写进 logcat，否则故障信息会彻底丢失。
+        android.util.Log.e("BaasRuntime", "openCompanionSocket failed: " + cause.javaClass.name + ": " + cause.message, cause)
+        cause.printStackTrace()
         throw IllegalStateException("AIO device runtime failed: ${cause.message ?: cause.javaClass.simpleName}; check Shizuku permission", cause)
     }
 
