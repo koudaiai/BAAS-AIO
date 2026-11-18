@@ -153,8 +153,15 @@ class SocketBroker : ISocketBroker.Stub() {
         // 蓝档案冷启动实测 15~25 秒才出焦点窗口；原来 10 秒会在托管/自动启动时
         // 必然超时（手动 launchPreviewGame 不等待，所以不受影响）。10s + 30s。
         val deadline = android.os.SystemClock.elapsedRealtime() + 40_000
+        // 蓝档案在新建虚拟屏上常常起得来但不渲染、拿不到焦点；
+        // 对虚拟屏注入一次点击就能唤醒（手动点预览画面也是同样效果）。
+        // 这里在等待期间周期性点一下，避免只能靠人工干预才启动成功。
+        var pollCount = 0
         while (android.os.SystemClock.elapsedRealtime() < deadline) {
             check(companion().displayId == displayId) { "Display changed while waiting for game input" }
+            if (++pollCount % 20 == 0) {
+                runCatching { moe.baas.aio.companion.SystemAccess.click(displayId, 640, 360) }
+            }
             val process = ProcessBuilder("dumpsys", "-t", "1", "input").redirectErrorStream(true).start()
             val dump = process.inputStream.bufferedReader().use { it.readText() }
             process.waitFor()
