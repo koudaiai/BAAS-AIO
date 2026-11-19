@@ -6,7 +6,7 @@
 | --- | --- |
 | `app/` | 应用本体，Kotlin 和 Compose 写的界面和服务。`src/main/python/` 下是在 Chaquopy 里运行的 Python 胶水代码 |
 | `companion-runtime/` | 在 Shizuku 进程里运行的 Companion，负责虚拟屏、输入和截图 |
-| `baas-core/` | 子模块，指向 BAAS 的 fork [sk1lyn3/blue_archive_auto_script](https://github.com/sk1lyn3/blue_archive_auto_script) |
+| `baas-core/` | 子模块，指向 BAAS 的 fork [koudaiai/blue_archive_auto_script](https://github.com/koudaiai/blue_archive_auto_script) 的 `aio/companion` 分支 |
 | `tools/` | 构建和打包脚本 |
 | `.github/workflows/` | 三个手动运行的工作流，用法见 [releasing.md](releasing.md) |
 | `.github/release-notes/` | APK 和 core 包的更新说明 |

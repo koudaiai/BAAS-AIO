@@ -1,4 +1,5 @@
 [submodule "baas-core"]
 	path = baas-core
-	url = https://github.com/sk1lyn3/blue_archive_auto_script.git
+	url = https://github.com/koudaiai/blue_archive_auto_script.git
+	branch = aio/companion
 	shallow = true

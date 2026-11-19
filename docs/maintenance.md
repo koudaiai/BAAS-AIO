@@ -1,6 +1,6 @@
 # 上游有改动时怎么维护
 
-BAAS 的上游仓库是 [pur1fying/blue_archive_auto_script](https://github.com/pur1fying/blue_archive_auto_script)。我们用的是自己的 fork [sk1lyn3/blue_archive_auto_script](https://github.com/sk1lyn3/blue_archive_auto_script)，子模块 `baas-core` 和 core 包都从 fork 拉代码。
+BAAS 的上游仓库是 [pur1fying/blue_archive_auto_script](https://github.com/pur1fying/blue_archive_auto_script)。我们用的是自己的 fork [koudaiai/blue_archive_auto_script](https://github.com/koudaiai/blue_archive_auto_script)，子模块 `baas-core` 和 core 包都从 fork 拉代码。
 
 大多数时候，上游的改动只需要发一个 core 包。只有动到应用本身的代码，才要发 APK。
 

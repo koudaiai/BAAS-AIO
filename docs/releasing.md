@@ -104,7 +104,7 @@ core 包的说明会显示在应用的更新弹窗里。弹窗支持 `#` 标题�
 
    | 输入 | 填写 |
    | --- | --- |
-   | `core_repository` | 保持默认 `sk1lyn3/blue_archive_auto_script` |
+   | `core_repository` | 保持默认 `koudaiai/blue_archive_auto_script` |
    | `core_ref` | 分支名，或者 **完整的 40 位提交号**。短提交号拉不下来，工作流会直接失败 |
    | `aio_ref` | 用本仓库哪个分支或提交里的打包脚本、配置目录、帮助文本和更新说明，默认 `main` |
    | `notes` | 一般留空，自动读说明文件。填了就用填的内容 |

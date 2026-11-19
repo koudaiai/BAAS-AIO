@@ -7,7 +7,7 @@ on:
       core_repository:
         description: 'Core repository (owner/repo)'
         required: true
-        default: sk1lyn3/blue_archive_auto_script
+        default: koudaiai/blue_archive_auto_script
         type: string
       core_ref:
         description: 'Core commit or branch to package'
