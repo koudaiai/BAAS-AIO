@@ -128,6 +128,9 @@ class CompanionUserService : ICompanionService.Stub(), AutoCloseable {
     @Synchronized override fun wakeDevice(): Boolean = try { screen.wake() }
         catch (e: Exception) { state.setError(e); false }
 
+    @Synchronized override fun unlock(pin: String): Boolean = try { screen.unlock(pin) }
+        catch (e: Exception) { state.setError(e); false }
+
     @Synchronized override fun setPhysicalScreenOff(off: Boolean): Boolean {
         return try {
             if (off && !screen.wake()) false else screen.setPanelOff(off)

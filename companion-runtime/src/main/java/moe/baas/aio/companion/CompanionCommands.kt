@@ -64,6 +64,11 @@ object CompanionCommands {
                 val ok = service.wakeDevice()
                 result.put("awake", ok); checked(ok, "Wake failed: ${service.status}")
             }
+            "unlock" -> {
+                // The PIN travels as text; never echo it back in the reply or any log.
+                val ok = service.unlock(request.optString("pin", ""))
+                result.put("unlocked", ok); checked(ok, "Unlock failed: ${service.status}")
+            }
             "screen" -> {
                 val off = request.optBoolean("off", true)
                 val ok = service.setPhysicalScreenOff(off)

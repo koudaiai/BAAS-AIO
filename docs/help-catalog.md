@@ -18,7 +18,7 @@
 ```json
 {
   "format": 1,
-  "appKeys": ["managed_wake_before_run"],
+  "appKeys": ["managed_wake_before_run", "managed_unlock_pin"],
   "entries": {
     "hardPriority": {
       "title": "困难图扫荡关卡",

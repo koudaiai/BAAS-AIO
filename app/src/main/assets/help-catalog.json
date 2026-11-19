@@ -1,12 +1,35 @@
 {
   "format": 1,
   "appKeys": [
-    "managed_wake_before_run"
+    "managed_wake_before_run",
+    "managed_unlock_pin"
   ],
   "entries": {
     "managed_wake_before_run": {
       "title": "托管前唤醒解锁",
       "summary": "开启后，托管执行任务前会按需唤醒设备并解除无密码锁屏；若原先处于息屏状态，唤醒后会关闭物理显示，保持任务运行。"
+    },
+    "managed_unlock_pin": {
+      "title": "解锁密码",
+      "summary": "锁屏是数字密码时，托管会先按需唤醒设备，再自动输入这里的密码完成解锁；不填则只能解除无密码锁屏。",
+      "sections": [
+        {
+          "title": "填写规则",
+          "lines": [
+            "只填纯数字，4-16 位",
+            "开头是 0 也照原样填：密码 0123 就填 0123，不要写成 123",
+            "改了锁屏密码要回来同步，否则托管会一直解锁失败",
+            "只保存在本机应用私有目录，不会写进日志"
+          ]
+        },
+        {
+          "title": "使用前提",
+          "lines": [
+            "需要先开启「托管前唤醒解锁」",
+            "Android 12 及以下没有让虚拟屏忽略锁屏的能力，锁屏时游戏窗口会被锁屏盖住，必须先真正解锁"
+          ]
+        }
+      ]
     },
     "createPriority_phase1": {
       "title": "制造优先级",

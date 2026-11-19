@@ -1,8 +1,11 @@
 package moe.baas.aio
 
 import android.app.Activity
+import android.app.AlertDialog
 import android.content.Context
 import android.os.Bundle
+import android.text.InputFilter
+import android.text.InputType
 import android.widget.Toast
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.tween
@@ -83,6 +86,7 @@ class SettingsPanel(private val context: Context, private val profileId: String,
                     if (title == "设备配置") {
                         Box(Modifier.fillMaxWidth().height(1.dp).background(Ui.Divider))
                         ManagedWakeSetting()
+                        ManagedUnlockPinSetting()
                     }
                 }
                 if (title == "编队配置") Section("活动图", groups.length(), focusGroup, scrollTo) { manual("活动图").Content() }
@@ -119,6 +123,55 @@ class SettingsPanel(private val context: Context, private val profileId: String,
         catch (error: Exception) {
             UiTheme.dialog(context).setMessage(error.message ?: "设置失败").setPositiveButton("确定", null).show()
         }
+    }
+
+    /** Keyguard PIN for managed runs; shown masked, edited as plain text so leading zeros survive. */
+    @Composable
+    private fun ManagedUnlockPinSetting() {
+        val pin = ManagedMode.unlockPin
+        val enabled = !TaskRuntime.isActive
+        val fieldAlpha = if (enabled) 1f else .55f
+        val label = "解锁密码"
+        Ui.Quiet {
+            Row(Modifier.fillMaxWidth().defaultMinSize(minHeight = 44.dp)
+                .clickable(enabled = enabled) { editUnlockPin(pin) }.padding(4.dp),
+                verticalAlignment = Alignment.CenterVertically) {
+                Row(Modifier.weight(1f).padding(end = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                    BText(label, 12.5f, modifier = Modifier.weight(1f, fill = false).alpha(fieldAlpha), padding = NoPadding)
+                    HelpTip("managed_unlock_pin", label = label)
+                }
+                BText(if (pin.isEmpty()) "未设置" else "●".repeat(pin.length), 12.5f,
+                    color = if (pin.isEmpty()) Ui.Muted else Ui.Navy,
+                    modifier = Modifier.alpha(fieldAlpha), padding = NoPadding)
+            }
+        }
+    }
+
+    private fun editUnlockPin(current: String) {
+        val input = UiTheme.input(context).apply {
+            setText(current)                        // 原样回填，前导 0 不丢
+            setSingleLine(true)
+            inputType = InputType.TYPE_CLASS_NUMBER // 只弹数字键盘，但内容仍是字符串
+            filters = arrayOf<InputFilter>(InputFilter.LengthFilter(16))
+            hint = "纯数字，开头是 0 也照原样输入"
+        }
+        val dialog = UiTheme.dialog(context).setTitle("解锁密码")
+            .setView(UiTheme.inputPanel(context, input))
+            .setNegativeButton("取消", null)
+            .setNeutralButton("清除", null)
+            .setPositiveButton("保存", null).create()
+        dialog.setOnShowListener {
+            dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener {
+                // Keep the raw string: "0123" must stay four characters, not become 123.
+                try { ManagedMode.setUnlockPin(input.text?.toString().orEmpty()); dialog.dismiss() }
+                catch (error: Exception) { Toast.makeText(context, error.message ?: "保存失败", Toast.LENGTH_SHORT).show() }
+            }
+            dialog.getButton(AlertDialog.BUTTON_NEUTRAL).setOnClickListener {
+                try { ManagedMode.setUnlockPin(""); dialog.dismiss() }
+                catch (error: Exception) { Toast.makeText(context, error.message ?: "清除失败", Toast.LENGTH_SHORT).show() }
+            }
+        }
+        dialog.show()
     }
 
     @Composable

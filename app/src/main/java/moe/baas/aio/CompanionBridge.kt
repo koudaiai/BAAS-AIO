@@ -67,6 +67,12 @@ class CompanionBridge(private val broker: ISocketBroker) : AutoCloseable {
         broker.beginManagedScreen()
         DebugTrace.log("Panel off completed; after=" + debugState())
     }
+    /** Unlock the keyguard with the user's PIN. The PIN is passed through without any echo. */
+    fun unlockDevice(pin: String): Boolean {
+        require(pin.isNotEmpty()) { "No unlock PIN configured" }
+        DebugTrace.log("Keyguard unlock requested digits=${pin.length}")
+        return broker.unlockDevice(pin)
+    }
     fun brokerInfo(): String = broker.ping()
     fun probeState(): String = broker.readProbeState()
     fun gameOptions(packageName: String): String = broker.gameOptions(packageName)

@@ -127,7 +127,17 @@ def prepare_device(bridge, gate, mode):
             deadline = time.monotonic() + 5
             while not mode.deviceReady():
                 if time.monotonic() >= deadline:
-                    raise RuntimeError("Automatic unlock failed; unlock the device or disable wake-before-managed")
+                    # A PIN-locked device stays locked after a plain wake: type the configured PIN.
+                    pin = str(mode.configuredUnlockPin())
+                    if not pin:
+                        raise RuntimeError("Automatic unlock failed; set the unlock PIN in settings "
+                                           "or disable wake-before-managed")
+                    gate.log(1, "Keyguard still locked; entering the configured unlock PIN")
+                    if not bridge.unlockDevice(pin):
+                        raise RuntimeError("Automatic unlock failed; check the unlock PIN in settings")
+                    if not mode.deviceReady():
+                        raise RuntimeError("Unlock reported success but the keyguard is still locked")
+                    break
                 if not gate.waitForNext(100):
                     return False
         if was_asleep:

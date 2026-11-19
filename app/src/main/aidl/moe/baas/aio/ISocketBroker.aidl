@@ -17,6 +17,7 @@ interface ISocketBroker {
     String closePreviewGame();
     String gameOptions(String packageName);
     void managedActivityPulse();
+    boolean unlockDevice(String pin);
     void beginManagedScreen();
     void endManagedScreen(boolean sleep);
     void awaitGameInput(String packageName);

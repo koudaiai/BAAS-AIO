@@ -16,6 +16,7 @@ interface ICompanionService {
     int cleanupStaleServices();
     String getStateJson();
     boolean wakeDevice();
+    boolean unlock(String pin);
     boolean setPhysicalScreenOff(boolean off);
     boolean pinch(int cx, int cy, int spreadStart, int spreadEnd, int durationMs);
     void setPreviewSurface(in Surface surface, IBinder owner);

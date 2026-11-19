@@ -17,7 +17,7 @@ import java.io.File
 /** AIO owns its Companion runtime inside this Shizuku root/ADB process. */
 class SocketBroker : ISocketBroker.Stub() {
     companion object {
-        const val SERVICE_VERSION = 42
+        const val SERVICE_VERSION = 43
         fun serviceArgs(context: android.content.Context) =
             rikka.shizuku.Shizuku.UserServiceArgs(android.content.ComponentName(context, SocketBroker::class.java))
                 .daemon(false).processNameSuffix("aio-broker").debuggable(BuildConfig.DEBUG)
@@ -239,6 +239,14 @@ class SocketBroker : ISocketBroker.Stub() {
 
     override fun managedActivityPulse() {
         moe.baas.aio.companion.SystemAccess.userActivity(0)
+    }
+
+    /** Types the PIN into the keyguard bouncer. The PIN itself is never logged or echoed. */
+    override fun unlockDevice(pin: String): Boolean {
+        val started = android.os.SystemClock.elapsedRealtime()
+        val ok = companion().unlock(pin)
+        DebugTrace.log("Unlock attempt digits=${pin.length} ok=$ok elapsed=${android.os.SystemClock.elapsedRealtime() - started}ms")
+        return ok
     }
 
     override fun gameOptions(packageName: String): String {

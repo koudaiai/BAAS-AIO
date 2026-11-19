@@ -45,6 +45,21 @@ object ManagedMode {
         check(!TaskRuntime.isActive) { "请先停止任务再修改" }
         prefs().edit().putBoolean("wakeBeforeRun", value).apply()
     }
+    /**
+     * Keyguard PIN, kept as text from the input field to the key injection so a leading zero is
+     * preserved: "0123" stays "0123" and types 0,1,2,3 — it is never parsed as a number.
+     */
+    val unlockPin get() = prefs().getString("unlockPin", "").orEmpty()
+    val hasUnlockPin get() = unlockPin.isNotEmpty()
+    fun setUnlockPin(value: String) {
+        check(!TaskRuntime.isActive) { "请先停止任务再修改" }
+        val digits = value.trim()
+        require(digits.isEmpty() || (digits.length in 4..16 && digits.all { it in '0'..'9' })) {
+            "解锁密码只能是 4-16 位纯数字"
+        }
+        prefs().edit().putString("unlockPin", digits).apply()
+    }
+    @JvmStatic fun configuredUnlockPin(): String = if (::context.isInitialized) unlockPin else ""
     @JvmStatic fun shouldWakeBeforeRun() = wakeBeforeRun
     fun selectedIds(): List<String> {
         val values = JSONArray(prefs().getString("profiles", "[]"))
