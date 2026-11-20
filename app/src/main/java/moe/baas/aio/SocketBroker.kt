@@ -17,7 +17,7 @@ import java.io.File
 /** AIO owns its Companion runtime inside this Shizuku root/ADB process. */
 class SocketBroker : ISocketBroker.Stub() {
     companion object {
-        const val SERVICE_VERSION = 44
+        const val SERVICE_VERSION = 45
         fun serviceArgs(context: android.content.Context) =
             rikka.shizuku.Shizuku.UserServiceArgs(android.content.ComponentName(context, SocketBroker::class.java))
                 .daemon(false).processNameSuffix("aio-broker").debuggable(BuildConfig.DEBUG)
@@ -25,6 +25,7 @@ class SocketBroker : ISocketBroker.Stub() {
         private const val SOCKET_NAME = "baas-aio-companion-v1"
     }
     private var service: CompanionUserService? = null
+    @Volatile private var alignedLevel: String? = null
     @Volatile private var managedScreenHidden = false
     @Volatile private var screenKeepAlive = false
     private val screenHandler = android.os.Handler(android.os.Looper.getMainLooper())
@@ -44,33 +45,50 @@ class SocketBroker : ISocketBroker.Stub() {
     private var clientDeath: android.os.IBinder.DeathRecipient? = null
 
     init {
-        alignMlsLevelWithApp()
+        // The companion listener must be created by an aligned thread: binder threads are spawned by
+        // Shizuku before this service initializes and keep the unaligned "u:r:su:s0" level. When the
+        // app level is not readable yet, leave creation to the first (aligned) call instead.
+        val level = alignCurrentThread()
+        android.util.Log.i("BaasRuntime", "Broker init MLS level=$level")
+        if (level != null) runCatching { companion() }.onFailure {
+            android.util.Log.e("BaasRuntime", "Cannot pre-create the companion socket", it)
+        }
     }
 
     /**
      * SELinux 的 mlsconstrain 要求 unix socket 双方 MLS level 相等。
      *
      * app 进程是 u:r:untrusted_app:s0:cXXX,...（带 category），而 broker 由 Shizuku
-     * 以 root 拉起，context 是 u:r:su:s0（无 category），所以 openCompanionSocket
-     * 返回 ParcelFileDescriptor 时 fd 传递被 restrict（表现为 DeadObjectException）。
+     * 以 root 拉起，context 是 u:r:su:s0（无 category）。这里把 broker 的 MLS level
+     * 对齐到 app 的 category，domain 仍是 su —— root 能力全部保留，只是 level 与 app 一致。
      *
-     * 这里把本进程的 MLS level 对齐到 app 的 category，domain 仍是 su ——
-     * root 能力（建虚拟屏、跨屏启动、注入）全部保留，只是 level 与 app 一致。
+     * 关键点：MLS level 是**按线程**生效的（/proc/self/attr/current 只改当前线程）。
+     * binder 线程在 Shizuku 启动服务时就已创建，永远是未对齐的 u:r:su:s0，所以只在 init
+     * 里对齐一次不够：那样的线程建出来的 socket 标签没有 category，SELinux 开启时 app
+     * 一读写就被拒（表现为 broker 被 DeadObjectException 干掉）。因此每个要碰 socket 的
+     * 线程都必须自己先对齐一次。
      */
-    private fun alignMlsLevelWithApp() {
-        runCatching {
+    private fun appMlsLevel(): String? {
+        alignedLevel?.let { return it }
+        return runCatching {
             val appPid = ProcessBuilder("pidof", "moe.baas.aio")
                 .redirectErrorStream(true).start()
                 .inputStream.bufferedReader().use { it.readText() }
-                .trim().split(" ").firstOrNull() ?: return
-            val appContext = File("/proc/$appPid/attr/current").readText().trim()
-            val categories = appContext.substringAfter("s0:", "")
-            if (categories.isBlank()) return
-            File("/proc/self/attr/current").writeText("u:r:su:s0:" + categories)
-            android.util.Log.i("BaasRuntime", "Aligned MLS level to app: u:r:su:s0:" + categories)
+                .trim().split(" ").firstOrNull() ?: return@runCatching null
+            val categories = File("/proc/$appPid/attr/current").readText().trim().substringAfter("s0:", "")
+            if (categories.isBlank()) null else ("u:r:su:s0:" + categories).also { alignedLevel = it }
+        }.getOrNull()
+    }
+
+    /** Aligns the calling thread and returns the level in effect, or null when it cannot be read. */
+    private fun alignCurrentThread(): String? {
+        val level = appMlsLevel() ?: return null
+        return runCatching {
+            File("/proc/self/attr/current").writeText(level)
+            level
         }.onFailure {
-            android.util.Log.e("BaasRuntime", "Align MLS level to app failed", it)
-        }
+            android.util.Log.e("BaasRuntime", "Align MLS level failed: $level", it)
+        }.getOrNull()
     }
 
     @Synchronized override fun attachClient(owner: android.os.IBinder) {
@@ -365,6 +383,9 @@ class SocketBroker : ISocketBroker.Stub() {
         }
 
     override fun openCompanionSocket(): ParcelFileDescriptor = try {
+        // Binder threads keep the unaligned level, and the client socket inherits the label of the
+        // thread that creates it; align here so the handed-over fd carries the app's categories.
+        alignCurrentThread()
         companion()
         connectSocket()
     } catch (error: Exception) {
