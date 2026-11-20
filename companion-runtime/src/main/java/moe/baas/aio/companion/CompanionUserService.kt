@@ -131,6 +131,11 @@ class CompanionUserService : ICompanionService.Stub(), AutoCloseable {
     @Synchronized override fun unlock(pin: String): Boolean = try { screen.unlock(pin) }
         catch (e: Exception) { state.setError(e); false }
 
+    /** Accepts the app-created channel end; the socket keeps the app's own SELinux label. */
+    @Synchronized override fun attachCompanionSocket(peer: android.os.ParcelFileDescriptor): Boolean = try {
+        socketServer.attach(peer); true
+    } catch (e: Exception) { state.setError(e); false }
+
     @Synchronized override fun setPhysicalScreenOff(off: Boolean): Boolean {
         return try {
             if (off && !screen.wake()) false else screen.setPanelOff(off)

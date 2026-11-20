@@ -2,6 +2,7 @@ package moe.baas.aio
 
 import android.net.LocalSocket
 import android.net.LocalSocketAddress
+import android.net.LocalSocketPair
 import android.os.ParcelFileDescriptor
 import android.system.Os
 import android.system.OsConstants
@@ -29,6 +30,9 @@ class CompanionBridge(private val broker: ISocketBroker) : AutoCloseable {
     }
 
     private fun openChannel(): Channel {
+        // Preferred: the app creates the socketpair, so both ends carry this app's SELinux label and
+        // nothing privileged has to be handed across the app/broker boundary.
+        pairChannel()?.let { return it }
         // Direct connect keeps the socket inside this process: no descriptor crosses the app/broker
         // boundary, which some ROMs reject through SELinux binder checks while enforcing.
         directChannel()?.let { return it }
@@ -45,6 +49,40 @@ class CompanionBridge(private val broker: ISocketBroker) : AutoCloseable {
             }
         }
         throw checkNotNull(last)
+    }
+
+    /** Socketpair created here and handed to the broker: no su-labelled socket, no policy change. */
+    private fun pairChannel(): Channel? {
+        val pair = runCatching { LocalSocketPair.create() }.getOrNull() ?: return null
+        val local = pair[0]
+        val remote = pair[1]
+        var descriptor: ParcelFileDescriptor? = null
+        return try {
+            val appSide = ParcelFileDescriptor.dup(local.fileDescriptor)
+            descriptor = appSide
+            val peer = ParcelFileDescriptor.dup(remote.fileDescriptor)
+            val attached = try { broker.attachCompanionSocket(peer) } finally { peer.close() }
+            if (!attached) {
+                appSide.close(); descriptor = null; return null
+            }
+            for (option in intArrayOf(OsConstants.SO_SNDTIMEO, OsConstants.SO_RCVTIMEO)) {
+                runCatching {
+                    Os.setsockoptTimeval(appSide.fileDescriptor, OsConstants.SOL_SOCKET, option,
+                        StructTimeval.fromMillis(20_000))
+                }
+            }
+            val channel = Channel(appSide)
+            channel.request(JSONObject().put("cmd", "ping"))
+            descriptor = null
+            channel
+        } catch (error: Throwable) {
+            DebugTrace.log("Socketpair channel failed: ${error.message}", 2)
+            descriptor?.let { runCatching { it.close() } }
+            null
+        } finally {
+            runCatching { local.close() }
+            runCatching { remote.close() }
+        }
     }
 
     /** Connects to the broker's companion socket as this app; the broker whitelists this uid. */

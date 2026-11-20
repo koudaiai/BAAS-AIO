@@ -1,4 +1,5 @@
 package moe.baas.aio.companion;
+import android.os.ParcelFileDescriptor;
 import android.view.Surface;
 import android.view.MotionEvent;
 
@@ -17,6 +18,7 @@ interface ICompanionService {
     String getStateJson();
     boolean wakeDevice();
     boolean unlock(String pin);
+    boolean attachCompanionSocket(in ParcelFileDescriptor peer);
     boolean setPhysicalScreenOff(boolean off);
     boolean pinch(int cx, int cy, int spreadStart, int spreadEnd, int durationMs);
     void setPreviewSurface(in Surface surface, IBinder owner);

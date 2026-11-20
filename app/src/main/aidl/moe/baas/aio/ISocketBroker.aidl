@@ -6,6 +6,7 @@ import android.view.MotionEvent;
 interface ISocketBroker {
     ParcelFileDescriptor openCompanionSocket();
     void ensureCompanion();
+    boolean attachCompanionSocket(in ParcelFileDescriptor peer);
     String ping();
     String readProbeState();
     void setPreviewSurface(in Surface surface, IBinder owner);

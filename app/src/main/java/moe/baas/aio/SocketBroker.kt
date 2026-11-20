@@ -17,7 +17,7 @@ import java.io.File
 /** AIO owns its Companion runtime inside this Shizuku root/ADB process. */
 class SocketBroker : ISocketBroker.Stub() {
     companion object {
-        const val SERVICE_VERSION = 46
+        const val SERVICE_VERSION = 47
         fun serviceArgs(context: android.content.Context) =
             rikka.shizuku.Shizuku.UserServiceArgs(android.content.ComponentName(context, SocketBroker::class.java))
                 .daemon(false).processNameSuffix("aio-broker").debuggable(BuildConfig.DEBUG)
@@ -399,6 +399,12 @@ class SocketBroker : ISocketBroker.Stub() {
     override fun ensureCompanion() {
         alignCurrentThread()
         companion()
+    }
+
+    /** Hands the app-created channel end to the companion; the socket keeps the app's label. */
+    override fun attachCompanionSocket(peer: ParcelFileDescriptor): Boolean {
+        alignCurrentThread()
+        return companion().attachCompanionSocket(peer)
     }
 
     override fun ping() = "uid=${android.os.Process.myUid()} pid=${android.os.Process.myPid()} runtime=embedded"
