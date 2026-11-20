@@ -28,6 +28,7 @@ class SocketBroker : ISocketBroker.Stub() {
     private var service: CompanionUserService? = null
     @Volatile private var alignedLevel: String? = null
     @Volatile private var managedScreenHidden = false
+    @Volatile private var managedBatchWokeDevice = false
     @Volatile private var screenKeepAlive = false
     private val screenHandler = android.os.Handler(android.os.Looper.getMainLooper())
     private val screenPulse = object : Runnable {
@@ -216,12 +217,13 @@ class SocketBroker : ISocketBroker.Stub() {
     }
 
     @Synchronized override fun beginManagedScreen() {
-        // The power key can restore the panel without updating our session state.
-        check(companion().setPhysicalScreenOff(true)) { "Cannot turn off the physical panel" }
-        managedScreenHidden = true
-        screenKeepAlive = true
+        // Keep the panel on for the whole batch. Blanking it fought PowerManager (the display slept
+        // mid-run and injected input was rejected), and it surprised the user if they picked the
+        // phone up. The display is only turned off again by lockManagedScreen() at the end.
+        managedScreenHidden = false
+        managedBatchWokeDevice = true
+        screenKeepAlive = false
         screenHandler.removeCallbacks(screenPulse)
-        screenHandler.post(screenPulse)
     }
 
     @Synchronized override fun endManagedScreen(sleep: Boolean) {
@@ -269,7 +271,10 @@ class SocketBroker : ISocketBroker.Stub() {
     @Synchronized override fun lockManagedScreen(): Boolean {
         screenKeepAlive = false
         screenHandler.removeCallbacks(screenPulse)
-        if (!managedScreenHidden) return true   // Nothing was blanked here; the panel is the user's.
+        // Only lock when this batch is the one that woke the device; a batch that ran while the user
+        // was already holding the phone must not snatch it away.
+        if (!managedBatchWokeDevice) return true
+        managedBatchWokeDevice = false
         return try {
             endManagedScreen(true)
             DebugTrace.log("Managed batch end: device locked")
