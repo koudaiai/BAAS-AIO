@@ -2,7 +2,6 @@ package moe.baas.aio
 
 import android.net.LocalSocket
 import android.net.LocalSocketAddress
-import android.net.LocalSocketPair
 import android.os.ParcelFileDescriptor
 import android.system.Os
 import android.system.OsConstants
@@ -53,35 +52,37 @@ class CompanionBridge(private val broker: ISocketBroker) : AutoCloseable {
 
     /** Socketpair created here and handed to the broker: no su-labelled socket, no policy change. */
     private fun pairChannel(): Channel? {
-        val pair = runCatching { LocalSocketPair.create() }.getOrNull() ?: return null
-        val local = pair[0]
-        val remote = pair[1]
-        var descriptor: ParcelFileDescriptor? = null
-        return try {
-            val appSide = ParcelFileDescriptor.dup(local.fileDescriptor)
-            descriptor = appSide
-            val peer = ParcelFileDescriptor.dup(remote.fileDescriptor)
+        val first = java.io.FileDescriptor()
+        val second = java.io.FileDescriptor()
+        var appSide: ParcelFileDescriptor? = null
+        try {
+            Os.socketpair(OsConstants.AF_UNIX, OsConstants.SOCK_STREAM, 0, first, second)
+            val local = ParcelFileDescriptor.dup(first)
+            appSide = local
+            val peer = ParcelFileDescriptor.dup(second)
             val attached = try { broker.attachCompanionSocket(peer) } finally { peer.close() }
-            if (!attached) {
-                appSide.close(); descriptor = null; return null
-            }
+            check(attached) { "Broker rejected the channel" }
             for (option in intArrayOf(OsConstants.SO_SNDTIMEO, OsConstants.SO_RCVTIMEO)) {
                 runCatching {
-                    Os.setsockoptTimeval(appSide.fileDescriptor, OsConstants.SOL_SOCKET, option,
+                    Os.setsockoptTimeval(local.fileDescriptor, OsConstants.SOL_SOCKET, option,
                         StructTimeval.fromMillis(20_000))
                 }
             }
-            val channel = Channel(appSide)
-            channel.request(JSONObject().put("cmd", "ping"))
-            descriptor = null
-            channel
+            val channel = Channel(local)
+            appSide = null      // Ownership moved to the channel.
+            try {
+                channel.request(JSONObject().put("cmd", "ping"))
+            } catch (error: Throwable) {
+                channel.close(); throw error
+            }
+            return channel
         } catch (error: Throwable) {
             DebugTrace.log("Socketpair channel failed: ${error.message}", 2)
-            descriptor?.let { runCatching { it.close() } }
-            null
+            appSide?.let { runCatching { it.close() } }
+            return null
         } finally {
-            runCatching { local.close() }
-            runCatching { remote.close() }
+            runCatching { Os.close(first) }
+            runCatching { Os.close(second) }
         }
     }
 
