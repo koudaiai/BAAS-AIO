@@ -31,6 +31,12 @@ class VirtualDisplayController {
         try {
             virtualDisplay = SystemAccess.displayManager().createVirtualDisplay(
                 "baas-aio", width, height, dpi, surface, buildFlags())
+        } catch (error: SecurityException) {
+            // DisplayManagerService validates that the package name belongs to the calling uid.
+            val context = SystemAccess.context()
+            throw IllegalStateException(
+                "createVirtualDisplay rejected: uid=${android.os.Process.myUid()} " +
+                    "pkg=${context.packageName} surface=$surface flags=${buildFlags()}: ${error.message}", error)
         } finally {
             surface.release()
         }

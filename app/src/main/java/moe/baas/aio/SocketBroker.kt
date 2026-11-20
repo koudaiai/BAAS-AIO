@@ -46,14 +46,11 @@ class SocketBroker : ISocketBroker.Stub() {
     private var clientDeath: android.os.IBinder.DeathRecipient? = null
 
     init {
-        // The companion listener must be created by an aligned thread: binder threads are spawned by
-        // Shizuku before this service initializes and keep the unaligned "u:r:su:s0" level. When the
-        // app level is not readable yet, leave creation to the first (aligned) call instead.
-        val level = alignCurrentThread()
-        android.util.Log.i("BaasRuntime", "Broker init MLS level=$level")
-        if (level != null) runCatching { companion() }.onFailure {
-            android.util.Log.e("BaasRuntime", "Cannot pre-create the companion socket", it)
-        }
+        // Binder threads are spawned by Shizuku before this service initializes and keep the
+        // unaligned "u:r:su:s0" level, so每处碰 socket 的线程都要自己对齐（见 alignCurrentThread）。
+        // Do not pre-create the companion here: doing so resolves SystemAccess.context() before the
+        // process is fully attached, which breaks DisplayManager calls that validate the package name.
+        android.util.Log.i("BaasRuntime", "Broker init MLS level=" + alignCurrentThread())
     }
 
     /**
