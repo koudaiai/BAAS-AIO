@@ -73,6 +73,12 @@ class CompanionBridge(private val broker: ISocketBroker) : AutoCloseable {
         DebugTrace.log("Keyguard unlock requested digits=${pin.length}")
         return broker.unlockDevice(pin)
     }
+    /** End of a managed batch: lock the device instead of leaving a dark but interactive screen. */
+    fun lockManagedScreen(): Boolean {
+        val locked = broker.lockManagedScreen()
+        DebugTrace.log("Managed end-of-batch lock requested; locked=$locked")
+        return locked
+    }
     fun brokerInfo(): String = broker.ping()
     fun probeState(): String = broker.readProbeState()
     fun gameOptions(packageName: String): String = broker.gameOptions(packageName)

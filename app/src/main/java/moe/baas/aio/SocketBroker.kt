@@ -17,7 +17,7 @@ import java.io.File
 /** AIO owns its Companion runtime inside this Shizuku root/ADB process. */
 class SocketBroker : ISocketBroker.Stub() {
     companion object {
-        const val SERVICE_VERSION = 43
+        const val SERVICE_VERSION = 44
         fun serviceArgs(context: android.content.Context) =
             rikka.shizuku.Shizuku.UserServiceArgs(android.content.ComponentName(context, SocketBroker::class.java))
                 .daemon(false).processNameSuffix("aio-broker").debuggable(BuildConfig.DEBUG)
@@ -216,10 +216,15 @@ class SocketBroker : ISocketBroker.Stub() {
             val power = moe.baas.aio.companion.SystemAccess.context()
                 .getSystemService(android.os.PowerManager::class.java)
             if (power.isInteractive) {
-                check(moe.baas.aio.companion.SystemAccess.keyEvent(0, android.view.KeyEvent.KEYCODE_SLEEP)) {
-                    "Cannot put the device to sleep"
+                val injected = moe.baas.aio.companion.SystemAccess.keyEvent(0, android.view.KeyEvent.KEYCODE_SLEEP)
+                if (!injected) {
+                    // Injection can be dropped while the display powers down; shell fallback is equivalent.
+                    runCatching {
+                        ProcessBuilder("input", "keyevent", "223").redirectErrorStream(true).start()
+                            .waitFor(3, java.util.concurrent.TimeUnit.SECONDS)
+                    }
                 }
-                val deadline = android.os.SystemClock.elapsedRealtime() + 2000
+                val deadline = android.os.SystemClock.elapsedRealtime() + 3000
                 while (power.isInteractive && android.os.SystemClock.elapsedRealtime() < deadline) Thread.sleep(50)
                 check(!power.isInteractive) { "Device did not enter sleep" }
             }
@@ -235,6 +240,31 @@ class SocketBroker : ISocketBroker.Stub() {
         // Leave panel and lock state to the user; allow normal idle timeout again.
         screenKeepAlive = false
         screenHandler.removeCallbacks(screenPulse)
+    }
+
+    /**
+     * End of a managed batch: hand the device back locked.
+     *
+     * While the batch ran, the physical panel was blanked through SurfaceControl so the virtual
+     * display kept composing; that leaves the system interactive with a dark screen. A real sleep
+     * returns the keyguard instead of that half-awake state, so the next batch wakes and unlocks
+     * like any other cold start.
+     */
+    @Synchronized override fun lockManagedScreen(): Boolean {
+        screenKeepAlive = false
+        screenHandler.removeCallbacks(screenPulse)
+        if (!managedScreenHidden) return true   // Nothing was blanked here; the panel is the user's.
+        return try {
+            endManagedScreen(true)
+            DebugTrace.log("Managed batch end: device locked")
+            true
+        } catch (error: Exception) {
+            android.util.Log.e("BaasRuntime", "Cannot lock after the managed batch; restoring the panel", error)
+            DebugTrace.log("Managed batch end: lock failed (${error.message}); restoring the panel", 2)
+            // Never leave the user with a dark screen that no longer reacts to the task.
+            runCatching { endManagedScreen(false) }
+            false
+        }
     }
 
     override fun managedActivityPulse() {

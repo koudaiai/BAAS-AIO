@@ -266,10 +266,11 @@ class TaskService : Service() {
         }
         run {
             try {
-                client.finishManagedScreen()
-                DebugTrace.log("Managed screen keepalive stopped; display state left unchanged; " + runtimeState(client))
+                if (managedBatch) client.lockManagedScreen() else client.finishManagedScreen()
+                DebugTrace.log((if (managedBatch) "Managed batch end: display locked; " else "Screen keepalive stopped; ")
+                    + runtimeState(client))
             } catch (error: Exception) {
-                val message = "Screen keepalive cleanup failed: ${error.message}"
+                val message = "Screen cleanup failed: ${error.message}"
                 TaskRuntime.appendLog(3, message)
                 report = JSONObject(report).put("state", "failed").put("error", message).toString()
             }
