@@ -133,9 +133,9 @@ class CompanionBridge(private val broker: ISocketBroker) : AutoCloseable {
     fun debugState(includeFocus: Boolean = false): String =
         if (!BuildConfig.DEBUG) "{}" else try { broker.debugRuntimeState(includeFocus) } catch (error: Exception) { "Diagnostic unavailable: $error" }
     fun beginManagedScreen() {
-        DebugTrace.log("Panel off requested; before=" + debugState())
+        DebugTrace.log("Managed screen started; before=" + debugState())
         broker.beginManagedScreen()
-        DebugTrace.log("Panel off completed; after=" + debugState())
+        DebugTrace.log("Managed screen ready; after=" + debugState())
     }
     /** Unlock the keyguard with the user's PIN. The PIN is passed through without any echo. */
     fun unlockDevice(pin: String): Boolean {
