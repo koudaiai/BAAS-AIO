@@ -17,12 +17,13 @@ import java.io.File
 /** AIO owns its Companion runtime inside this Shizuku root/ADB process. */
 class SocketBroker : ISocketBroker.Stub() {
     companion object {
-        const val SERVICE_VERSION = 45
+        const val SERVICE_VERSION = 46
         fun serviceArgs(context: android.content.Context) =
             rikka.shizuku.Shizuku.UserServiceArgs(android.content.ComponentName(context, SocketBroker::class.java))
                 .daemon(false).processNameSuffix("aio-broker").debuggable(BuildConfig.DEBUG)
                 .version(SERVICE_VERSION).tag("baas-aio-broker")
-        private const val SOCKET_NAME = "baas-aio-companion-v1"
+        /** Companion channel name; [CompanionBridge] connects to it directly. */
+        const val COMPANION_SOCKET = "baas-aio-companion-v1"
     }
     private var service: CompanionUserService? = null
     @Volatile private var alignedLevel: String? = null
@@ -375,7 +376,7 @@ class SocketBroker : ISocketBroker.Stub() {
 
     private fun connectSocket(): ParcelFileDescriptor =
         LocalSocket().use { socket ->
-            socket.connect(LocalSocketAddress(SOCKET_NAME, LocalSocketAddress.Namespace.ABSTRACT))
+            socket.connect(LocalSocketAddress(COMPANION_SOCKET, LocalSocketAddress.Namespace.ABSTRACT))
             socket.soTimeout = 20000
             Os.setsockoptTimeval(socket.fileDescriptor, OsConstants.SOL_SOCKET,
                 OsConstants.SO_SNDTIMEO, StructTimeval.fromMillis(20000))
@@ -395,6 +396,12 @@ class SocketBroker : ISocketBroker.Stub() {
         android.util.Log.e("BaasRuntime", "openCompanionSocket failed: " + cause.javaClass.name + ": " + cause.message, cause)
         cause.printStackTrace()
         throw IllegalStateException("AIO device runtime failed: ${cause.message ?: cause.javaClass.simpleName}; check Shizuku permission", cause)
+    }
+
+    /** Brings the companion (and its listener socket) up on an aligned thread before a direct connect. */
+    override fun ensureCompanion() {
+        alignCurrentThread()
+        companion()
     }
 
     override fun ping() = "uid=${android.os.Process.myUid()} pid=${android.os.Process.myPid()} runtime=embedded"

@@ -19,6 +19,10 @@ class CompanionSocketServer(private val service: CompanionUserService) : AutoClo
     private val clients = ConcurrentHashMap.newKeySet<LocalSocket>()
     private val slots = Semaphore(4)
     @Volatile private var closed = false
+    /** The app may connect directly, so its traffic never needs a descriptor handed over by Binder. */
+    private val appUid = runCatching {
+        SystemAccess.context().packageManager.getApplicationInfo("moe.baas.aio", 0).uid
+    }.getOrDefault(-1)
 
     init { thread(name = "baas-socket-accept", isDaemon = true) { acceptLoop() } }
 
@@ -27,9 +31,9 @@ class CompanionSocketServer(private val service: CompanionUserService) : AutoClo
             try {
                 val socket = listener.accept()
                 val uid = socket.peerCredentials.uid
-                // Only ADB/root may reach privileged operations.
+                // Only the app itself, ADB/root may reach privileged operations.
                 // Closed channels release their slots on the serving threads, not on the caller.
-                if ((uid != 0 && uid != 2000) || !slots.tryAcquire(500, TimeUnit.MILLISECONDS)) {
+                if ((uid != 0 && uid != 2000 && uid != appUid) || !slots.tryAcquire(500, TimeUnit.MILLISECONDS)) {
                     Log.d("BaasSocket", "Rejected client uid=$uid active=${clients.size}")
                     socket.close()
                     continue

@@ -1,7 +1,11 @@
 package moe.baas.aio
 
+import android.net.LocalSocket
+import android.net.LocalSocketAddress
 import android.os.ParcelFileDescriptor
 import android.system.Os
+import android.system.OsConstants
+import android.system.StructTimeval
 import org.json.JSONObject
 import java.nio.ByteBuffer
 import java.util.UUID
@@ -25,6 +29,9 @@ class CompanionBridge(private val broker: ISocketBroker) : AutoCloseable {
     }
 
     private fun openChannel(): Channel {
+        // Direct connect keeps the socket inside this process: no descriptor crosses the app/broker
+        // boundary, which some ROMs reject through SELinux binder checks while enforcing.
+        directChannel()?.let { return it }
         var last: Throwable? = null
         repeat(3) {
             val channel = Channel(broker.openCompanionSocket())
@@ -38,6 +45,30 @@ class CompanionBridge(private val broker: ISocketBroker) : AutoCloseable {
             }
         }
         throw checkNotNull(last)
+    }
+
+    /** Connects to the broker's companion socket as this app; the broker whitelists this uid. */
+    private fun directChannel(): Channel? {
+        val socket = LocalSocket()
+        return try {
+            broker.ensureCompanion()
+            socket.connect(LocalSocketAddress(SocketBroker.COMPANION_SOCKET, LocalSocketAddress.Namespace.ABSTRACT))
+            val descriptor = ParcelFileDescriptor.dup(socket.fileDescriptor)
+            try {
+                for (option in intArrayOf(OsConstants.SO_SNDTIMEO, OsConstants.SO_RCVTIMEO)) {
+                    Os.setsockoptTimeval(descriptor.fileDescriptor, OsConstants.SOL_SOCKET, option,
+                        StructTimeval.fromMillis(20_000))
+                }
+                Channel(descriptor).also { it.request(JSONObject().put("cmd", "ping")) }
+            } catch (error: Throwable) {
+                descriptor.close(); throw error
+            }
+        } catch (error: Throwable) {
+            DebugTrace.log("Direct companion connect failed; falling back to the broker channel: ${error.message}", 2)
+            null
+        } finally {
+            runCatching { socket.close() }
+        }
     }
 
     fun command(json: String): String {
