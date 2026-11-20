@@ -1095,8 +1095,12 @@ class HomeActivity : PreviewActivity() {
             } },
             onRunNow = { event -> safely {
                 store.resetTaskSchedule(selected.id, event.getString("func_name"))
+                // A failed batch leaves a five-minute retry gate on the profile; clearing it is what
+                // makes "run now" actually run instead of reporting due=false.
+                ManagedMode.clearRecovery(selected.id)
                 refreshSchedulePage()
                 scheduleSaved = true
+                if (ManagedMode.enabled) ManagedMode.scheduleChanged(this)
             } },
             onToggle = { row, enabled ->
                 try {

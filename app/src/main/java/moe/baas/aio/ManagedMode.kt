@@ -101,6 +101,19 @@ object ManagedMode {
     @Synchronized fun recovery(id: String): JSONObject =
         JSONObject(prefs().getString("recovery", "{}")!!).optJSONObject(id) ?: JSONObject()
     @JvmStatic fun profileRecovery(path: String): String = recovery(java.io.File(path).name).toString()
+
+    /**
+     * Clears the retry gate of one profile. A failed batch defers the profile for five minutes and the
+     * scheduler refuses to run it until that gate expires, so a manual "run now" has to clear it first —
+     * otherwise the tab is due but the batch still reports due=false and does nothing.
+     */
+    @Synchronized fun clearRecovery(id: String) {
+        val states = JSONObject(prefs().getString("recovery", "{}")!!)
+        if (!states.has(id)) return
+        states.remove(id)
+        prefs().edit().putString("recovery", states.toString()).commit()
+        DebugTrace.log("Manual run cleared recovery for $id")
+    }
     @JvmStatic @JvmOverloads fun saveRecovery(path: String, value: String, token: Long, cleared: String = "重试成功"): Boolean {
         synchronized(this) {
             val id = java.io.File(path).name
